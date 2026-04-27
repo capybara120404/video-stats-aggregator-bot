@@ -1,11 +1,11 @@
-package video.stats.aggregator.bot.util;
+package video.stats.aggregator.bot.infrastructure.util;
 
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import video.stats.aggregator.bot.model.Platform;
+import video.stats.aggregator.bot.domain.entity.Platform;
 
 public class PlatformDetector {
     private static final Pattern YT_WATCH = Pattern.compile("[?&]v=([A-Za-z0-9_-]{11})");

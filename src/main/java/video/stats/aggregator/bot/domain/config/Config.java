@@ -1,10 +1,10 @@
-package video.stats.aggregator.bot.config;
+package video.stats.aggregator.bot.domain.config;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class AppConfig {
-    private static final Logger log = LoggerFactory.getLogger(AppConfig.class);
+public class Config {
+    private static final Logger log = LoggerFactory.getLogger(Config.class);
 
     private final String botToken;
     private final String botUsername;
@@ -14,7 +14,7 @@ public class AppConfig {
     private final String youtubeApiKey;
     private final int httpTimeoutSeconds;
 
-    private AppConfig(String botToken, String botUsername,
+    private Config(String botToken, String botUsername,
             String dbUrl, String dbUser, String dbPassword,
             String youtubeApiKey, int httpTimeoutSeconds) {
         this.botToken = botToken;
@@ -26,7 +26,7 @@ public class AppConfig {
         this.httpTimeoutSeconds = httpTimeoutSeconds;
     }
 
-    public static AppConfig load() {
+    public static Config load() {
         String botToken = requireEnv("BOT_TOKEN");
         String botUsername = getEnv("BOT_USERNAME", "VideoStatsAggregatorBot");
         String dbUrl = getEnv("DB_URL", "jdbc:postgresql://localhost:5432/videobot");
@@ -40,7 +40,7 @@ public class AppConfig {
         }
 
         log.info("Config loaded: bot={}, db={}", botUsername, dbUrl);
-        return new AppConfig(botToken, botUsername, dbUrl, dbUser, dbPassword, ytKey, timeout);
+        return new Config(botToken, botUsername, dbUrl, dbUser, dbPassword, ytKey, timeout);
     }
 
     private static String requireEnv(String name) {

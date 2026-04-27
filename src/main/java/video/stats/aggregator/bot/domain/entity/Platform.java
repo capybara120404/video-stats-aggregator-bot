@@ -1,4 +1,4 @@
-package video.stats.aggregator.bot.model;
+package video.stats.aggregator.bot.domain.entity;
 
 public enum Platform {
     YOUTUBE("YouTube", "🎬"),

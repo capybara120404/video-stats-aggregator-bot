@@ -8,14 +8,14 @@ import org.telegram.telegrambots.meta.TelegramBotsApi;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.updatesreceivers.DefaultBotSession;
 
-import video.stats.aggregator.bot.bot.VideoStatsAggregatorBot;
-import video.stats.aggregator.bot.config.AppConfig;
-import video.stats.aggregator.bot.db.DatabaseManager;
-import video.stats.aggregator.bot.repository.VideoRepository;
-import video.stats.aggregator.bot.service.VideoService;
-import video.stats.aggregator.bot.service.platform.PlatformClient;
-import video.stats.aggregator.bot.service.platform.RuTubeClient;
-import video.stats.aggregator.bot.service.platform.YouTubeClient;
+import video.stats.aggregator.bot.application.port.client.PlatformClient;
+import video.stats.aggregator.bot.application.service.VideoService;
+import video.stats.aggregator.bot.domain.config.Config;
+import video.stats.aggregator.bot.infrastructure.api.RuTubeClient;
+import video.stats.aggregator.bot.infrastructure.api.YouTubeClient;
+import video.stats.aggregator.bot.infrastructure.persistence.DatabaseContext;
+import video.stats.aggregator.bot.infrastructure.persistence.repository.VideoRepository;
+import video.stats.aggregator.bot.presentation.VideoStatsAggregatorBot;
 
 public class Main {
     private static final Logger log = LoggerFactory.getLogger(Main.class);
@@ -25,10 +25,10 @@ public class Main {
         log.info("║      Video Stats Aggregator Bot v1.0.0      ║");
         log.info("╚═════════════════════════════════════════════╝");
 
-        AppConfig config = AppConfig.load();
-        DatabaseManager dbManager = new DatabaseManager(config);
-        dbManager.initialize();
-        VideoRepository repo = new VideoRepository(dbManager);
+        Config config = Config.load();
+        DatabaseContext context = new DatabaseContext(config);
+        context.initialize();
+        VideoRepository repo = new VideoRepository(context);
 
         List<PlatformClient> clients = List.of(
                 new YouTubeClient(config),

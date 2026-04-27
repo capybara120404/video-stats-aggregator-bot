@@ -1,9 +1,9 @@
-package video.stats.aggregator.bot.db;
+package video.stats.aggregator.bot.infrastructure.persistence;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import video.stats.aggregator.bot.config.AppConfig;
+import video.stats.aggregator.bot.domain.config.Config;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -12,16 +12,16 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 
-public class DatabaseManager {
-    private static final Logger log = LoggerFactory.getLogger(DatabaseManager.class);
+public class DatabaseContext {
+    private static final Logger log = LoggerFactory.getLogger(DatabaseContext.class);
     private static final int POOL_SIZE = 3;
     private static final int RETRY_COUNT = 5;
     private static final long RETRY_DELAY_MS = 3_000;
 
-    private final AppConfig config;
+    private final Config config;
     private final List<Connection> pool = new ArrayList<>(POOL_SIZE);
 
-    public DatabaseManager(AppConfig config) {
+    public DatabaseContext(Config config) {
         this.config = config;
     }
 

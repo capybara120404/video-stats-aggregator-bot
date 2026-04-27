@@ -1,4 +1,4 @@
-package video.stats.aggregator.bot.model;
+package video.stats.aggregator.bot.domain.entity;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -16,6 +16,7 @@ public class Video {
     private String errorMessage;
     private LocalDateTime lastUpdated;
     private LocalDateTime addedAt;
+    private boolean newlyCreated;
 
     public Video() {
     }
@@ -100,6 +101,14 @@ public class Video {
         this.addedAt = v;
     }
 
+    public boolean isNewlyCreated() {
+        return newlyCreated;
+    }
+
+    public void setNewlyCreated(boolean v) {
+        this.newlyCreated = v;
+    }
+
     public String getFormattedViews() {
         if (status == VideoStatus.PENDING)
             return "—";
@@ -111,8 +120,9 @@ public class Video {
     }
 
     public String getDisplayTitle() {
-        if (title != null && !title.isBlank())
+        if (title != null && !title.isBlank()) {
             return title;
+        }
         String s = url.length() > 50 ? url.substring(0, 47) + "…" : url;
         return s;
     }

@@ -1,6 +1,6 @@
-package video.stats.aggregator.bot.service.platform;
+package video.stats.aggregator.bot.application.port.client;
 
-import video.stats.aggregator.bot.model.Platform;
+import video.stats.aggregator.bot.domain.entity.Platform;
 
 public interface PlatformClient {
     Platform getPlatform();

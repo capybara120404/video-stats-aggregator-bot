@@ -1,13 +1,4 @@
-package video.stats.aggregator.bot.service.platform;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
-import video.stats.aggregator.bot.config.AppConfig;
-import video.stats.aggregator.bot.model.Platform;
+package video.stats.aggregator.bot.infrastructure.api;
 
 import java.io.IOException;
 import java.net.URI;
@@ -16,15 +7,24 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 
-public class RuTubeClient implements PlatformClient {
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import video.stats.aggregator.bot.application.port.client.PlatformClient;
+import video.stats.aggregator.bot.domain.config.Config;
+import video.stats.aggregator.bot.domain.entity.Platform;
+
+public class RuTubeClient implements PlatformClient {
     private static final Logger log = LoggerFactory.getLogger(RuTubeClient.class);
     private static final String BASE_URL = "https://rutube.ru/api/video/";
 
     private final HttpClient http;
     private final ObjectMapper json = new ObjectMapper();
 
-    public RuTubeClient(AppConfig config) {
+    public RuTubeClient(Config config) {
         this.http = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(config.getHttpTimeoutSeconds()))
                 .followRedirects(HttpClient.Redirect.NORMAL)

@@ -1,4 +1,4 @@
-package video.stats.aggregator.bot.model;
+package video.stats.aggregator.bot.domain.entity;
 
 public enum VideoStatus {
     OK("✅ Ок"),
@@ -19,8 +19,9 @@ public enum VideoStatus {
     }
 
     public static VideoStatus fromString(String s) {
-        if (s == null)
+        if (s == null) {
             return PENDING;
+        }
         try {
             return VideoStatus.valueOf(s);
         } catch (IllegalArgumentException e) {

@@ -1,17 +1,14 @@
 package video.stats.aggregator.bot.presentation.handler;
 
+import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import video.stats.aggregator.bot.presentation.ui.MessageFormatter;
 import video.stats.aggregator.bot.presentation.util.BotMessenger;
 
-import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
-
 import static video.stats.aggregator.bot.presentation.ui.KeyboardFactory.buildMainMenuKeyboard;
 
-public class MainMenuHandler implements UpdateHandler {
-    private final BotMessenger messenger;
-
+public class MainMenuHandler extends BaseHandler {
     public MainMenuHandler(BotMessenger messenger) {
-        this.messenger = messenger;
+        super(messenger);
     }
 
     @Override

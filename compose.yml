@@ -1,45 +1,44 @@
-version: "3.9"
-
 services:
-
-  db:
-    image: postgres:15-alpine
-    container_name: videobot-db
+  postgres:
+    image: postgres:17-alpine
+    container_name: video-stats-aggregator-bot-db
     restart: unless-stopped
+    env_file: .env
     environment:
-      POSTGRES_DB: videobot
-      POSTGRES_USER: ${DB_USER:-postgres}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: video_stats_aggregator_bot_db
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d videobot" ]
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER} -d video_stats_aggregator_bot_db" ]
       interval: 5s
       timeout: 5s
       retries: 10
       start_period: 10s
     networks:
-      - botnet
+      - video-stats-aggregator-bot-net
 
-  bot:
+  video-stats-aggregator-bot:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: videobot-app
+    container_name: video-stats-aggregator-bot
     restart: unless-stopped
     depends_on:
-      db:
+      postgres:
         condition: service_healthy
+    env_file: .env
     environment:
       BOT_TOKEN: ${BOT_TOKEN}
-      BOT_USERNAME: сюда юзер нейм бота
-      DB_URL: jdbc:postgresql://db:5432/videobot
-      DB_USER: postgres
-      DB_PASSWORD: postgres
-      YOUTUBE_API_KEY: сюда апи кей
-      HTTP_TIMEOUT_SECONDS: ${HTTP_TIMEOUT_SECONDS:-10}
+      BOT_USERNAME: ${BOT_USERNAME}
+      DB_URL: jdbc:postgresql://video-stats-aggregator-bot-db:5432/video_stats_aggregator_bot_db
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      YOUTUBE_API_KEY: ${YOUTUBE_API_KEY}
+      HTTP_TIMEOUT_SECONDS: ${HTTP_TIMEOUT_SECONDS}
     networks:
-      - botnet
+      - video-stats-aggregator-bot-net
     logging:
       driver: "json-file"
       options:
@@ -51,7 +50,7 @@ volumes:
     driver: local
 
 networks:
-  botnet:
+  video-stats-aggregator-bot-net:
     driver: bridge
     ipam:
       config:

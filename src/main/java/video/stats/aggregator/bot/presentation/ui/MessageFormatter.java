@@ -1,9 +1,9 @@
 package video.stats.aggregator.bot.presentation.ui;
 
-import java.util.List;
-
 import video.stats.aggregator.bot.domain.entity.Video;
 import video.stats.aggregator.bot.domain.entity.VideoStatus;
+
+import java.util.List;
 
 public class MessageFormatter {
 
@@ -28,7 +28,7 @@ public class MessageFormatter {
                 Нажмите кнопку <b>📋 Мои видео</b>. Там же можно обновить данные.
 
                 <b>Как удалить видео?</b>
-                Чтобы удалить видео, нажмите на команду <b>/del_ID</b> рядом с ним
+                Чтобы удалить видео, нажмите на команду <b>/del_ID</b> рядом с ним.
 
                 <i>Статусы:</i>
                 ✅ Ок — данные актуальны
@@ -38,23 +38,23 @@ public class MessageFormatter {
                 """;
     }
 
-    public static String buildVideoAddedMessage(Video v) {
+    public static String buildVideoAddedMessage(Video video) {
         StringBuilder sb = new StringBuilder();
-        if (v.isNewlyCreated()) {
+        if (video.isNewlyCreated()) {
             sb.append("✅ <b>Видео добавлено!</b>\n\n");
         } else {
             sb.append("ℹ️ <b>Видео уже есть в списке.</b>\n")
                     .append("<i>Данные обновлены до актуальных:</i>\n\n");
         }
 
-        sb.append(v.getPlatform().format()).append("\n");
-        sb.append("📌 <a href=\"").append(v.getUrl()).append("\">")
-                .append(escapeHtml(v.getDisplayTitle())).append("</a>\n");
-        sb.append("👁 ").append(v.getFormattedViews()).append(" просмотров\n");
-        sb.append("📊 ").append(v.getStatus().getLabel());
+        sb.append(video.getPlatform().format()).append("\n");
+        sb.append("📌 <a href=\"").append(video.getUrl()).append("\">")
+                .append(escapeHtml(video.getDisplayTitle())).append("</a>\n");
+        sb.append("👁 ").append(video.getFormattedViews()).append(" просмотров\n");
+        sb.append("📊 ").append(video.getStatus().getLabel());
 
-        if (v.getStatus() == VideoStatus.UNAVAILABLE || v.getStatus() == VideoStatus.ERROR) {
-            sb.append("\n<i>").append(escapeHtml(v.getErrorMessage())).append("</i>");
+        if (video.getStatus() == VideoStatus.UNAVAILABLE || video.getStatus() == VideoStatus.ERROR) {
+            sb.append("\n<i>").append(escapeHtml(video.getErrorMessage())).append("</i>");
         }
         return sb.toString();
     }
@@ -65,33 +65,28 @@ public class MessageFormatter {
         }
 
         long totalViews = videos.stream().mapToLong(Video::getViews).sum();
-
         StringBuilder sb = new StringBuilder();
         sb.append("📋 <b>Отслеживаемые видео</b> (").append(videos.size()).append("):\n\n");
 
         for (int i = 0; i < videos.size(); i++) {
-            Video v = videos.get(i);
+            Video video = videos.get(i);
             sb.append("<b>").append(i + 1).append(".</b> ")
-                    .append(v.getPlatform().format())
-                    .append(" — 🗑 /del_").append(v.getId()).append("\n");
+                    .append(video.getPlatform().format())
+                    .append(" — 🗑 /del_").append(video.getId()).append("\n");
+            sb.append("📌 <a href=\"").append(video.getUrl()).append("\">")
+                    .append(escapeHtml(video.getDisplayTitle())).append("</a>\n");
+            sb.append("👁 <b>").append(video.getFormattedViews()).append("</b> просмотров\n");
+            sb.append("📊 ").append(video.getStatus().getLabel());
 
-            sb.append("📌 <a href=\"").append(v.getUrl()).append("\">")
-                    .append(escapeHtml(v.getDisplayTitle())).append("</a>\n");
-
-            sb.append("👁 <b>").append(v.getFormattedViews()).append("</b> просмотров\n");
-            sb.append("📊 ").append(v.getStatus().getLabel());
-
-            if (v.getStatus() == VideoStatus.UNAVAILABLE) {
+            if (video.getStatus() == VideoStatus.UNAVAILABLE) {
                 sb.append(" <i>(последние известные данные)</i>");
             }
-
-            sb.append("\n🕐 ").append(v.getFormattedLastUpdated()).append("\n\n");
+            sb.append("\n🕐 ").append(video.getFormattedLastUpdated()).append("\n\n");
         }
 
         sb.append("━━━━━━━━━━━━━━━━━━━━\n");
         sb.append("📊 <b>Итого:</b> ").append(videos.size())
-                .append(" видео | <b>").append(fmt(totalViews)).append("</b> просмотров\n\n");
-
+                .append(" видео | <b>").append(formatNumber(totalViews)).append("</b> просмотров\n\n");
         sb.append("💡 <i>Чтобы удалить видео, нажмите на команду <b>/del_ID</b> рядом с ним.</i>");
 
         return sb.toString();
@@ -100,7 +95,7 @@ public class MessageFormatter {
     public static String buildStatsMessage(long count, long views) {
         return "📊 <b>Общая статистика</b>\n\n"
                 + "🔗 Ссылок отслеживается: <b>" + count + "</b>\n"
-                + "👁 Суммарно просмотров:  <b>" + fmt(views) + "</b>";
+                + "👁 Суммарно просмотров:  <b>" + formatNumber(views) + "</b>";
     }
 
     public static String buildAddInstructionsMessage() {
@@ -109,14 +104,15 @@ public class MessageFormatter {
                 + "Например:\n<code>https://www.youtube.com/watch?v=dQw4w9WgXcQ</code>";
     }
 
-    public static String fmt(long n) {
-        return String.format("%,d", n).replace(',', ' ');
+    public static String formatNumber(long number) {
+        return String.format("%,d", number).replace(',', ' ');
     }
 
-    public static String escapeHtml(String s) {
-        if (s == null)
+    public static String escapeHtml(String input) {
+        if (input == null) {
             return "";
-        return s.replace("&", "&amp;")
+        }
+        return input.replace("&", "&amp;")
                 .replace("<", "&lt;")
                 .replace(">", "&gt;")
                 .replace("\"", "&quot;");

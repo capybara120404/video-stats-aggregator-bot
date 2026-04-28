@@ -1,26 +1,23 @@
 package video.stats.aggregator.bot.presentation.handler;
 
-import video.stats.aggregator.bot.application.service.VideoService;
-import video.stats.aggregator.bot.presentation.util.BotMessenger;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
+import video.stats.aggregator.bot.application.service.VideoService;
+import video.stats.aggregator.bot.presentation.util.BotMessenger;
 
 import java.sql.SQLException;
 
 import static video.stats.aggregator.bot.presentation.ui.KeyboardFactory.buildBackToMenuKeyboard;
 
-public class DeleteVideoHandler implements UpdateHandler {
-    private static final Logger log = LoggerFactory.getLogger(DeleteVideoHandler.class);
-
+public class DeleteVideoHandler extends BaseHandler {
+    private static final Logger LOG = LoggerFactory.getLogger(DeleteVideoHandler.class);
     private final VideoService service;
-    private final BotMessenger messenger;
     private final ListVideosHandler listHandler;
 
     public DeleteVideoHandler(VideoService service, BotMessenger messenger, ListVideosHandler listHandler) {
+        super(messenger);
         this.service = service;
-        this.messenger = messenger;
         this.listHandler = listHandler;
     }
 
@@ -35,22 +32,19 @@ public class DeleteVideoHandler implements UpdateHandler {
         try {
             id = Long.parseLong(arg);
         } catch (NumberFormatException e) {
-            messenger.sendOrEdit(chatId, null, "❗ ID должен быть числом. Используйте /list чтобы узнать ID.",
-                    buildBackToMenuKeyboard());
+            messenger.sendOrEdit(chatId, null, "❗ ID должен быть числом.", buildBackToMenuKeyboard());
             return;
         }
 
         try {
-            boolean deleted = service.deleteVideo(id);
-            if (deleted) {
-                messenger.sendOrEdit(chatId, null, "✅ Видео #" + id + " удалено из списка.", buildBackToMenuKeyboard());
+            if (service.deleteVideo(id)) {
+                messenger.sendOrEdit(chatId, null, "✅ Видео #" + id + " удалено.", buildBackToMenuKeyboard());
                 listHandler.handle(chatId, null, null);
             } else {
-                messenger.sendOrEdit(chatId, null, "❓ Видео с ID " + id + " не найдено.", buildBackToMenuKeyboard());
+                messenger.sendOrEdit(chatId, null, "❓ Видео не найдено.", buildBackToMenuKeyboard());
             }
         } catch (SQLException e) {
-            log.error("DB error in DeleteVideoHandler", e);
-            messenger.sendOrEdit(chatId, null, "❌ Ошибка базы данных.", buildBackToMenuKeyboard());
+            sendError(chatId, "Ошибка базы данных.", LOG, e);
         }
     }
 }

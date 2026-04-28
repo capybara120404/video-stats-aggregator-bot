@@ -1,5 +1,19 @@
 package video.stats.aggregator.bot.application.service;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import video.stats.aggregator.bot.application.port.client.ApiException;
+import video.stats.aggregator.bot.application.port.client.NotFoundException;
+import video.stats.aggregator.bot.application.port.client.PlatformClient;
+import video.stats.aggregator.bot.application.port.client.PlatformClient.VideoStats;
+import video.stats.aggregator.bot.application.port.client.PlatformException;
+import video.stats.aggregator.bot.application.port.client.UnavailableException;
+import video.stats.aggregator.bot.application.port.repository.Repository;
+import video.stats.aggregator.bot.domain.entity.Platform;
+import video.stats.aggregator.bot.domain.entity.Video;
+import video.stats.aggregator.bot.domain.entity.VideoStatus;
+import video.stats.aggregator.bot.infrastructure.util.PlatformDetector;
+
 import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -8,23 +22,8 @@ import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import video.stats.aggregator.bot.application.port.client.PlatformClient;
-import video.stats.aggregator.bot.application.port.client.PlatformClient.ApiException;
-import video.stats.aggregator.bot.application.port.client.PlatformClient.NotFoundException;
-import video.stats.aggregator.bot.application.port.client.PlatformClient.PlatformException;
-import video.stats.aggregator.bot.application.port.client.PlatformClient.UnavailableException;
-import video.stats.aggregator.bot.application.port.client.PlatformClient.VideoStats;
-import video.stats.aggregator.bot.application.port.repository.Repository;
-import video.stats.aggregator.bot.domain.entity.Platform;
-import video.stats.aggregator.bot.domain.entity.Video;
-import video.stats.aggregator.bot.domain.entity.VideoStatus;
-import video.stats.aggregator.bot.infrastructure.util.PlatformDetector;
-
 public class VideoService {
-    private static final Logger log = LoggerFactory.getLogger(VideoService.class);
+    private static final Logger LOG = LoggerFactory.getLogger(VideoService.class);
 
     private final Repository repository;
     private final Map<Platform, PlatformClient> clients;
@@ -39,52 +38,49 @@ public class VideoService {
         PlatformDetector.Result detection = PlatformDetector.detect(rawUrl);
 
         if (!detection.isSupported()) {
-            throw new IllegalArgumentException(
-                    "Неподдерживаемая платформа или некорректная ссылка: " + rawUrl);
+            throw new IllegalArgumentException("Unsupported platform or invalid URL: " + rawUrl);
         }
 
         String url = detection.getNormalizedUrl();
-        Platform platform = detection.getPlatform();
-        String videoId = detection.getVideoId();
-
         Optional<Video> existing = repository.findByUrl(url);
+
         if (existing.isPresent()) {
-            log.info("URL already tracked, refreshing: {}", url);
-            Video v = existing.get();
-            fetchAndApply(v);
-            repository.updateStats(v.getId(), v.getViews(), v.getTitle(), v.getStatus(), v.getErrorMessage());
-            v.setNewlyCreated(false);
-            return v;
+            Video video = existing.get();
+            LOG.info("URL already tracked, refreshing: {}", url);
+            updateVideoStats(video);
+            video.setNewlyCreated(false);
+            return video;
         }
 
+        // 1. Создаем объект
         Video video = new Video();
         video.setUrl(url);
-        video.setPlatform(platform);
-        video.setVideoId(videoId);
+        video.setPlatform(detection.getPlatform());
+        video.setVideoId(detection.getVideoId());
         video.setStatus(VideoStatus.PENDING);
 
-        fetchAndApply(video);
-        video.setNewlyCreated(true);
+        // 2. Сначала сохраняем в БД, чтобы репозиторий проставил ID
+        Video savedVideo = repository.save(video);
 
-        return repository.save(video);
+        // 3. Теперь обновляем статистику, используя ID из savedVideo
+        updateVideoStats(savedVideo);
+
+        savedVideo.setNewlyCreated(true);
+        return savedVideo;
     }
 
     public Video refreshVideo(long id) throws SQLException {
         Video video = repository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Видео с id=" + id + " не найдено"));
+                .orElseThrow(() -> new IllegalArgumentException("Video not found with id: " + id));
 
-        fetchAndApply(video);
-        repository.updateStats(video.getId(), video.getViews(), video.getTitle(),
-                video.getStatus(), video.getErrorMessage());
+        updateVideoStats(video);
         return video;
     }
 
     public List<Video> refreshAll() throws SQLException {
         List<Video> all = repository.findAll();
-        for (Video v : all) {
-            fetchAndApply(v);
-            repository.updateStats(v.getId(), v.getViews(), v.getTitle(),
-                    v.getStatus(), v.getErrorMessage());
+        for (Video video : all) {
+            updateVideoStats(video);
         }
         return all;
     }
@@ -105,12 +101,24 @@ public class VideoService {
         return repository.deleteById(id);
     }
 
+    private void updateVideoStats(Video video) throws SQLException {
+        fetchAndApply(video);
+
+        if (video.getId() == null) {
+            LOG.error("Attempted to update stats for video without ID: {}", video.getUrl());
+            return;
+        }
+
+        repository.updateStats(video.getId(), video.getViews(), video.getTitle(),
+                video.getStatus(), video.getErrorMessage());
+    }
+
     private void fetchAndApply(Video video) {
         PlatformClient client = clients.get(video.getPlatform());
 
         if (client == null) {
             video.setStatus(VideoStatus.ERROR);
-            video.setErrorMessage("Клиент для платформы " + video.getPlatform() + " не зарегистрирован");
+            video.setErrorMessage("Client not registered for platform: " + video.getPlatform());
             return;
         }
 
@@ -121,34 +129,24 @@ public class VideoService {
             video.setStatus(VideoStatus.OK);
             video.setErrorMessage(null);
             video.setLastUpdated(LocalDateTime.now());
-            log.info("Fetched stats for {} id={}: views={}", video.getPlatform(), video.getVideoId(),
+            LOG.info("Fetched stats for {} id={}: views={}", video.getPlatform(), video.getVideoId(),
                     stats.viewCount());
 
         } catch (UnavailableException e) {
-            log.warn("Platform {} unavailable for videoId={}: {}", video.getPlatform(), video.getVideoId(),
-                    e.getMessage());
-            video.setStatus(VideoStatus.UNAVAILABLE);
-            video.setErrorMessage(e.getMessage());
-
+            handleError(video, VideoStatus.UNAVAILABLE, e.getMessage());
         } catch (NotFoundException e) {
-            log.warn("Video not found: platform={} id={}", video.getPlatform(), video.getVideoId());
-            video.setStatus(VideoStatus.NOT_FOUND);
-            video.setErrorMessage(e.getMessage());
-
+            handleError(video, VideoStatus.NOT_FOUND, e.getMessage());
         } catch (ApiException e) {
-            String msg = e.getMessage();
-            if (msg != null && msg.contains("API key")) {
-                video.setStatus(VideoStatus.NO_API_KEY);
-            } else {
-                video.setStatus(VideoStatus.ERROR);
-            }
-            video.setErrorMessage(msg);
-            log.warn("API error for {} id={}: {}", video.getPlatform(), video.getVideoId(), msg);
-
+            VideoStatus status = e.getMessage().contains("API key") ? VideoStatus.NO_API_KEY : VideoStatus.ERROR;
+            handleError(video, status, e.getMessage());
         } catch (PlatformException e) {
-            log.error("Unexpected platform error", e);
-            video.setStatus(VideoStatus.ERROR);
-            video.setErrorMessage(e.getMessage());
+            handleError(video, VideoStatus.ERROR, e.getMessage());
         }
+    }
+
+    private void handleError(Video video, VideoStatus status, String message) {
+        LOG.warn("Error for {} id={}: {}", video.getPlatform(), video.getVideoId(), message);
+        video.setStatus(status);
+        video.setErrorMessage(message);
     }
 }

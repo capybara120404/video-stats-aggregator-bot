@@ -1,34 +1,23 @@
 package video.stats.aggregator.bot.infrastructure.api;
 
-import java.io.IOException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import video.stats.aggregator.bot.application.port.client.ApiException;
+import video.stats.aggregator.bot.application.port.client.NotFoundException;
+import video.stats.aggregator.bot.application.port.client.PlatformException;
+import video.stats.aggregator.bot.application.port.client.UnavailableException;
+import video.stats.aggregator.bot.domain.entity.Platform;
+
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.time.Duration;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
-import video.stats.aggregator.bot.application.port.client.PlatformClient;
-import video.stats.aggregator.bot.domain.config.Config;
-import video.stats.aggregator.bot.domain.entity.Platform;
-
-public class RuTubeClient implements PlatformClient {
-    private static final Logger log = LoggerFactory.getLogger(RuTubeClient.class);
+public class RuTubeClient extends AbstractPlatformClient {
     private static final String BASE_URL = "https://rutube.ru/api/video/";
 
-    private final HttpClient http;
-    private final ObjectMapper json = new ObjectMapper();
-
-    public RuTubeClient(Config config) {
-        this.http = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(config.getHttpTimeoutSeconds()))
-                .followRedirects(HttpClient.Redirect.NORMAL)
-                .build();
+    public RuTubeClient(HttpClient httpClient, ObjectMapper objectMapper) {
+        super(httpClient, objectMapper);
     }
 
     @Override
@@ -38,60 +27,34 @@ public class RuTubeClient implements PlatformClient {
 
     @Override
     public VideoStats fetchStats(String videoId) throws PlatformException {
-        String url = BASE_URL + videoId + "/";
-        log.debug("RuTube API request for videoId={}", videoId);
+        HttpRequest req = HttpRequest.newBuilder()
+                .uri(URI.create(BASE_URL + videoId + "/"))
+                .header("Accept", "application/json")
+                .header("User-Agent", "VideoStatsAggregatorBot/1.0")
+                .GET()
+                .build();
 
-        HttpResponse<String> response;
-        try {
-            HttpRequest req = HttpRequest.newBuilder()
-                    .uri(URI.create(url))
-                    .GET()
-                    .header("Accept", "application/json")
-                    .header("User-Agent", "Mozilla/5.0 (compatible; VideoStatsAggregatorBot/1.0)")
-                    .build();
-            response = http.send(req, HttpResponse.BodyHandlers.ofString());
-        } catch (IOException e) {
-            throw new UnavailableException("RuTube API unreachable: " + e.getMessage(), e);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new UnavailableException("Request interrupted", e);
-        }
-
+        HttpResponse<String> response = send(req);
         int status = response.statusCode();
-        String body = response.body();
 
         if (status == 404) {
-            throw new NotFoundException("Video not found on RuTube: " + videoId);
+            throw new NotFoundException("Video not found: " + videoId);
         }
         if (status == 403 || status == 429) {
-            throw new UnavailableException("RuTube returned HTTP " + status + " (rate-limited / blocked)",
-                    new IOException("HTTP " + status));
+            throw new UnavailableException("Rate limited", null);
         }
         if (status != 200) {
-            throw new ApiException("RuTube API returned HTTP " + status);
+            throw new ApiException("API returned " + status);
         }
 
-        return parseResponse(videoId, body);
-    }
-
-    private VideoStats parseResponse(String videoId, String body) throws PlatformException {
         try {
-            JsonNode root = json.readTree(body);
-
+            JsonNode root = objectMapper.readTree(response.body());
             if (root.has("detail")) {
-                String detail = root.path("detail").asText();
-                throw new NotFoundException("RuTube API error for " + videoId + ": " + detail);
+                throw new NotFoundException(root.path("detail").asText());
             }
-
-            String title = root.path("title").asText("Unknown Title");
-            long views = root.has("hits") ? root.path("hits").asLong(0L)
-                    : root.path("views").asLong(0L);
-
-            log.debug("RuTube videoId={} title='{}' views={}", videoId, title, views);
-            return new VideoStats(title, views);
-
-        } catch (IOException e) {
-            throw new ApiException("Failed to parse RuTube API response: " + e.getMessage());
+            return new VideoStats(root.path("title").asText("Unknown"), root.path("hits").asLong(0L));
+        } catch (Exception e) {
+            throw new ApiException("Parse error: " + e.getMessage());
         }
     }
 }

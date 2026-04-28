@@ -1,69 +1,89 @@
 package video.stats.aggregator.bot.infrastructure.util;
 
+import video.stats.aggregator.bot.domain.entity.Platform;
+
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.Map;
+import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import video.stats.aggregator.bot.domain.entity.Platform;
+public final class PlatformDetector {
 
-public class PlatformDetector {
-    private static final Pattern YT_WATCH = Pattern.compile("[?&]v=([A-Za-z0-9_-]{11})");
-    private static final Pattern YT_SHORT = Pattern.compile("youtu\\.be/([A-Za-z0-9_-]{11})");
-    private static final Pattern YT_SHORTS = Pattern.compile("/shorts/([A-Za-z0-9_-]{11})");
-    private static final Pattern YT_EMBED = Pattern.compile("/embed/([A-Za-z0-9_-]{11})");
-
-    private static final Pattern RUTUBE_VIDEO = Pattern.compile("/video/([a-f0-9]{32})");
-    private static final Pattern RUTUBE_EMBED = Pattern.compile("/play/embed/([a-f0-9]{32})");
+    private static final Map<Platform, Pattern[]> PLATFORM_PATTERNS = Map.of(
+            Platform.YOUTUBE, new Pattern[] {
+                    Pattern.compile("[?&]v=([A-Za-z0-9_-]{11})"),
+                    Pattern.compile("youtu\\.be/([A-Za-z0-9_-]{11})"),
+                    Pattern.compile("/shorts/([A-Za-z0-9_-]{11})"),
+                    Pattern.compile("/embed/([A-Za-z0-9_-]{11})")
+            },
+            Platform.RUTUBE, new Pattern[] {
+                    Pattern.compile("/video/([a-f0-9]{32})"),
+                    Pattern.compile("/play/embed/([a-f0-9]{32})")
+            });
 
     private PlatformDetector() {
+        throw new UnsupportedOperationException("Utility class");
     }
 
     public static Result detect(String rawUrl) {
-        if (rawUrl == null || rawUrl.isBlank())
+        if (rawUrl == null || rawUrl.isBlank()) {
             return Result.unknown(rawUrl);
-
-        String url = rawUrl.trim();
-
-        if (!url.startsWith("http://") && !url.startsWith("https://")) {
-            url = "https://" + url;
         }
 
+        String url = normalizeUrl(rawUrl.trim());
         String host = extractHost(url);
-        if (host == null)
-            return Result.unknown(rawUrl);
 
-        if (host.contains("youtube.com") || host.contains("youtu.be")) {
-            String id = matchFirst(url, YT_WATCH, YT_SHORT, YT_SHORTS, YT_EMBED);
-            if (id != null)
-                return new Result(Platform.YOUTUBE, id, url);
+        if (host == null) {
+            return Result.unknown(url);
         }
 
-        if (host.contains("rutube.ru")) {
-            String id = matchFirst(url, RUTUBE_VIDEO, RUTUBE_EMBED);
-            if (id != null)
-                return new Result(Platform.RUTUBE, id, url);
-        }
+        return detectPlatform(host, url);
+    }
 
-        return Result.unknown(url);
+    private static String normalizeUrl(String url) {
+        return (!url.startsWith("http://") && !url.startsWith("https://"))
+                ? "https://" + url
+                : url;
     }
 
     private static String extractHost(String url) {
         try {
-            URI uri = new URI(url);
-            String host = uri.getHost();
-            return host != null ? host.toLowerCase() : null;
+            return Optional.ofNullable(new URI(url).getHost())
+                    .map(String::toLowerCase)
+                    .orElse(null);
         } catch (URISyntaxException e) {
             return null;
         }
     }
 
-    @SafeVarargs
-    private static String matchFirst(String url, Pattern... patterns) {
-        for (Pattern p : patterns) {
-            Matcher m = p.matcher(url);
-            if (m.find())
-                return m.group(1);
+    private static Result detectPlatform(String host, String url) {
+        for (Map.Entry<Platform, Pattern[]> entry : PLATFORM_PATTERNS.entrySet()) {
+            if (isHostMatch(host, entry.getKey())) {
+                String videoId = findVideoId(url, entry.getValue());
+                if (videoId != null) {
+                    return new Result(entry.getKey(), videoId, url);
+                }
+            }
+        }
+        return Result.unknown(url);
+    }
+
+    private static boolean isHostMatch(String host, Platform platform) {
+        return switch (platform) {
+            case YOUTUBE -> host.contains("youtube.com") || host.contains("youtu.be");
+            case RUTUBE -> host.contains("rutube.ru");
+            default -> false;
+        };
+    }
+
+    private static String findVideoId(String url, Pattern[] patterns) {
+        for (Pattern pattern : patterns) {
+            Matcher matcher = pattern.matcher(url);
+            if (matcher.find()) {
+                return matcher.group(1);
+            }
         }
         return null;
     }
@@ -79,7 +99,7 @@ public class PlatformDetector {
             this.normalizedUrl = normalizedUrl;
         }
 
-        static Result unknown(String url) {
+        public static Result unknown(String url) {
             return new Result(Platform.UNKNOWN, null, url != null ? url : "");
         }
 

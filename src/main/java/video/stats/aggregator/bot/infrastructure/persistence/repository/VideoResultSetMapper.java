@@ -22,6 +22,7 @@ final class VideoResultSetMapper {
         video.setErrorMessage(resultSet.getString("error_msg"));
         video.setLastUpdated(convertTimestampToLocalDateTime(resultSet.getTimestamp("last_updated")));
         video.setAddedAt(convertTimestampToLocalDateTime(resultSet.getTimestamp("added_at")));
+
         return video;
     }
 

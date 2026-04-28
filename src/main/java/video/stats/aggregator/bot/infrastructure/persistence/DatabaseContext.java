@@ -2,7 +2,6 @@ package video.stats.aggregator.bot.infrastructure.persistence;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import video.stats.aggregator.bot.domain.config.Config;
 
 import java.sql.Connection;
@@ -12,70 +11,12 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 
-public class DatabaseContext {
-    private static final Logger log = LoggerFactory.getLogger(DatabaseContext.class);
-    private static final int POOL_SIZE = 3;
-    private static final int RETRY_COUNT = 5;
-    private static final long RETRY_DELAY_MS = 3_000;
-
-    private final Config config;
-    private final List<Connection> pool = new ArrayList<>(POOL_SIZE);
-
-    public DatabaseContext(Config config) {
-        this.config = config;
-    }
-
-    public void initialize() {
-        log.info("Initialising database at {}", config.getDbUrl());
-        connectWithRetry();
-        runSchema();
-        log.info("Database initialised successfully.");
-    }
-
-    private void connectWithRetry() {
-        for (int attempt = 1; attempt <= RETRY_COUNT; attempt++) {
-            try {
-                pool.clear();
-                for (int i = 0; i < POOL_SIZE; i++) {
-                    pool.add(openConnection());
-                }
-                log.info("Connection pool created ({} connections).", POOL_SIZE);
-                return;
-            } catch (SQLException e) {
-                log.warn("DB connection attempt {}/{} failed: {}", attempt, RETRY_COUNT, e.getMessage());
-                if (attempt == RETRY_COUNT) {
-                    throw new RuntimeException("Cannot connect to database after " + RETRY_COUNT + " attempts", e);
-                }
-                sleep(RETRY_DELAY_MS);
-            }
-        }
-    }
-
-    private Connection openConnection() throws SQLException {
-        return DriverManager.getConnection(
-                config.getDbUrl(), config.getDbUser(), config.getDbPassword());
-    }
-
-    public synchronized Connection getConnection() throws SQLException {
-        for (int i = 0; i < pool.size(); i++) {
-            Connection c = pool.get(i);
-            try {
-                if (c == null || c.isClosed() || !c.isValid(2)) {
-                    log.debug("Reconnecting pool slot {}.", i);
-                    c = openConnection();
-                    pool.set(i, c);
-                }
-                return c;
-            } catch (SQLException ex) {
-                log.warn("Pool slot {} reconnection failed, trying next.", i);
-            }
-        }
-        Connection fresh = openConnection();
-        pool.set(0, fresh);
-        return fresh;
-    }
-
-    private static final String SCHEMA = """
+public final class DatabaseContext {
+    private static final Logger LOGGER = LoggerFactory.getLogger(DatabaseContext.class);
+    private static final int CONNECTION_POOL_SIZE = 3;
+    private static final int MAX_RETRY_ATTEMPTS = 5;
+    private static final long RETRY_DELAY_MILLISECONDS = 3_000L;
+    private static final String DATABASE_SCHEMA_SQL = """
             CREATE TABLE IF NOT EXISTS videos (
                 id           BIGSERIAL PRIMARY KEY,
                 url          TEXT        NOT NULL UNIQUE,
@@ -93,19 +34,108 @@ public class DatabaseContext {
             CREATE INDEX IF NOT EXISTS idx_videos_added_at ON videos (added_at DESC);
             """;
 
-    private void runSchema() {
-        try (Statement st = getConnection().createStatement()) {
-            st.execute(SCHEMA);
-            log.debug("Schema applied.");
-        } catch (SQLException e) {
-            throw new RuntimeException("Failed to apply database schema", e);
+    private final Config configuration;
+    private final List<Connection> connectionPool;
+
+    public DatabaseContext(Config configuration) {
+        this.configuration = configuration;
+        this.connectionPool = new ArrayList<>(CONNECTION_POOL_SIZE);
+    }
+
+    public void initialize() {
+        LOGGER.info("Initialising database at {}", configuration.getDbUrl());
+        establishConnectionPool();
+        applyDatabaseSchema();
+        LOGGER.info("Database initialised successfully.");
+    }
+
+    public synchronized Connection getConnection() throws SQLException {
+        for (int index = 0; index < connectionPool.size();) {
+            Connection existingConnection = connectionPool.get(index);
+            if (isConnectionValid(existingConnection)) {
+                return existingConnection;
+            }
+            tryReconnectSlot(index);
+
+            return connectionPool.get(index);
+        }
+
+        return createAndStoreNewConnection();
+    }
+
+    private void establishConnectionPool() {
+        for (int attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
+            try {
+                clearAndPopulatePool();
+                LOGGER.info("Connection pool created ({} connections).", CONNECTION_POOL_SIZE);
+                return;
+            } catch (SQLException exception) {
+                handleConnectionFailure(attempt, exception);
+            }
         }
     }
 
-    private static void sleep(long ms) {
+    private void clearAndPopulatePool() throws SQLException {
+        connectionPool.clear();
+        for (int i = 0; i < CONNECTION_POOL_SIZE; i++) {
+            connectionPool.add(createNewConnection());
+        }
+    }
+
+    private void handleConnectionFailure(int currentAttempt, SQLException exception) {
+        LOGGER.warn("DB connection attempt {}/{} failed: {}", currentAttempt, MAX_RETRY_ATTEMPTS,
+                exception.getMessage());
+        if (currentAttempt == MAX_RETRY_ATTEMPTS) {
+            throw new RuntimeException("Cannot connect to database after " + MAX_RETRY_ATTEMPTS + " attempts",
+                    exception);
+        }
+        pauseExecution(RETRY_DELAY_MILLISECONDS);
+    }
+
+    private boolean isConnectionValid(Connection connection) throws SQLException {
+        return connection != null && !connection.isClosed() && connection.isValid(2);
+    }
+
+    private void tryReconnectSlot(int slotIndex) {
         try {
-            Thread.sleep(ms);
-        } catch (InterruptedException ie) {
+            Connection newConnection = createNewConnection();
+            connectionPool.set(slotIndex, newConnection);
+            LOGGER.debug("Reconnected pool slot {}.", slotIndex);
+        } catch (SQLException exception) {
+            LOGGER.warn("Pool slot {} reconnection failed, trying next.", slotIndex);
+        }
+    }
+
+    private Connection createAndStoreNewConnection() throws SQLException {
+        Connection freshConnection = createNewConnection();
+        if (!connectionPool.isEmpty()) {
+            connectionPool.set(0, freshConnection);
+        } else {
+            connectionPool.add(freshConnection);
+        }
+        return freshConnection;
+    }
+
+    private Connection createNewConnection() throws SQLException {
+        return DriverManager.getConnection(
+                configuration.getDbUrl(),
+                configuration.getDbUser(),
+                configuration.getDbPassword());
+    }
+
+    private void applyDatabaseSchema() {
+        try (Statement statement = getConnection().createStatement()) {
+            statement.execute(DATABASE_SCHEMA_SQL);
+            LOGGER.debug("Schema applied.");
+        } catch (SQLException exception) {
+            throw new RuntimeException("Failed to apply database schema", exception);
+        }
+    }
+
+    private static void pauseExecution(long durationMilliseconds) {
+        try {
+            Thread.sleep(durationMilliseconds);
+        } catch (InterruptedException interruptedException) {
             Thread.currentThread().interrupt();
         }
     }

@@ -39,7 +39,7 @@ public class Config {
         int timeout = Integer.parseInt(getEnv("HTTP_TIMEOUT_SECONDS", DEFAULT_TIMEOUT));
 
         if (ytKey.isEmpty()) {
-            LOG.warn("YOUTUBE_API_KEY is not set — YouTube view fetching will be unavailable!");
+            LOG.warn("YOUTUBE_API_KEY is not set - YouTube view fetching will be unavailable!");
         }
 
         LOG.info("Config loaded: bot={}, db={}", botUsername, dbUrl);

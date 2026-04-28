@@ -31,10 +31,10 @@ public class MessageFormatter {
                 Чтобы удалить видео, нажмите на команду <b>/del_ID</b> рядом с ним.
 
                 <i>Статусы:</i>
-                ✅ Ок — данные актуальны
-                ⚠️ Недоступно — платформа не отвечает
-                🚫 Не найдено — видео удалено или закрыто
-                ❌ Ошибка — прочие ошибки
+                ✅ Ок - данные актуальны
+                ⚠️ Недоступно - платформа не отвечает
+                🚫 Не найдено - видео удалено или закрыто
+                ❌ Ошибка - прочие ошибки
                 """;
     }
 
@@ -72,7 +72,7 @@ public class MessageFormatter {
             Video video = videos.get(i);
             sb.append("<b>").append(i + 1).append(".</b> ")
                     .append(video.getPlatform().format())
-                    .append(" — 🗑 /del_").append(video.getId()).append("\n");
+                    .append(" - 🗑 /del_").append(video.getId()).append("\n");
             sb.append("📌 <a href=\"").append(video.getUrl()).append("\">")
                     .append(escapeHtml(video.getDisplayTitle())).append("</a>\n");
             sb.append("👁 <b>").append(video.getFormattedViews()).append("</b> просмотров\n");

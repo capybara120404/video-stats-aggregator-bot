@@ -111,7 +111,7 @@ public class Video {
 
     public String getFormattedViews() {
         if (status == VideoStatus.PENDING)
-            return "—";
+            return "-";
         return String.format("%,d", views).replace(',', ' ');
     }
 
